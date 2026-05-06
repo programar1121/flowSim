@@ -7,7 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
     /* ============================================================
-       CSS VARIABLES & RESET (unchanged from original, except minor additions)
+       CSS VARIABLES & RESET
     ============================================================ */
     :root {
       --bg: #0f1115;
@@ -156,7 +156,6 @@
     .btn-cancel { background: transparent; color: var(--text2); padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); font-family: 'Inter', sans-serif; font-size: 0.85rem; cursor: pointer; transition: all .2s; }
     .btn-cancel:hover { background: var(--surface2); color: var(--text); }
 
-    /* Modal input groups for multi‑variable */
     .modal-input-group { margin-bottom: 12px; }
     .modal-input-group label { margin-top: 0; margin-bottom: 4px; font-weight: 500; }
     .modal-input-group input { margin-bottom: 0; }
@@ -494,7 +493,7 @@ const NODE_W = 140, NODE_H = 48, DIAMOND_W = 156, DIAMOND_H = 68;
 const PORT_RADIUS = 5;
 
 /* ================================================================
-   SAMPLE FLOWCHART (updated to demo multi‑variable input)
+   SAMPLE FLOWCHART (multi‑variable demo)
 ================================================================ */
 const SAMPLE_FLOWCHART = {
   nodes:[
@@ -516,7 +515,7 @@ const SAMPLE_FLOWCHART = {
 };
 
 /* ================================================================
-   STATE (unchanged except minor additions)
+   STATE
 ================================================================ */
 const State = (() => {
   let _memory = {}, _current = null, _running = false, _finished = false;
@@ -543,7 +542,37 @@ const State = (() => {
 })();
 
 /* ================================================================
-   BUILDER STATE (enhanced with port‑based connections)
+   GRID CACHE (performance)
+================================================================ */
+function createGridPattern(w, h) {
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  const isDark = !document.body.classList.contains('light-mode');
+  ctx.fillStyle = isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.04)';
+  for (let x = 20; x < w; x += 30) {
+    for (let y = 20; y < h; y += 30) {
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  return canvas;
+}
+
+let gridCache = { builder: null, sim: null, dark: null };
+
+function getGridImage(w, h, canvasId) {
+  const isDark = !document.body.classList.contains('light-mode');
+  const key = canvasId + (isDark ? '_dark' : '_light');
+  if (!gridCache[key] || gridCache[key].width !== w || gridCache[key].height !== h) {
+    gridCache[key] = createGridPattern(w, h);
+  }
+  return gridCache[key];
+}
+
+/* ================================================================
+   BUILDER STATE (port‑based connections, drag‑and‑drop, grid cache)
 ================================================================ */
 const Builder = (() => {
   let nodes = [];
@@ -565,10 +594,13 @@ const Builder = (() => {
     const par = canvas.parentElement;
     W = par.clientWidth; H = Math.max(440, W * 0.9);
     canvas.width = W; canvas.height = H;
+    // Invalidate grid cache for builder (just clear key, will regenerate)
+    const isDark = !document.body.classList.contains('light-mode');
+    const key = 'builder' + (isDark ? '_dark' : '_light');
+    if (gridCache[key]) delete gridCache[key];
     draw();
   }
 
-  // Returns node and side if a port is clicked, else node if body clicked
   function getHitInfo(px, py) {
     for (let i = nodes.length - 1; i >= 0; i--) {
       const n = nodes[i];
@@ -587,7 +619,7 @@ const Builder = (() => {
         }
       }
       
-      // Then check body (using bounding box)
+      // Then check body
       if (n.type === 'decision') {
         if (Math.abs(px - nx)/hw + Math.abs(py - ny)/hh <= 1) return { node: n };
       } else {
@@ -808,17 +840,9 @@ const Builder = (() => {
     ctx.restore();
   }
 
-  function getEdgePointsWithPorts(fn, tn, fromSide, toSide) {
-    const fnPos = getPortPositions(fn);
-    const tnPos = getPortPositions(tn);
-    // Use sides if available, else compute default
-    let p1 = fromSide ? fnPos[fromSide] : (fnPos.right || fnPos.bottom);
-    let p2 = toSide ? tnPos[toSide] : (tnPos.left || tnPos.top);
-    if (!p1 || !p2) {
-      // fallback to old method
-      return getEdgePtsFallback(fn, tn);
-    }
-    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  function getEdgePointsWithPorts(fn, tn) {
+    // Use default edge routing (can be enhanced with side info)
+    return getEdgePtsFallback(fn, tn);
   }
 
   function getEdgePtsFallback(fn, tn) {
@@ -839,7 +863,6 @@ const Builder = (() => {
     ctx.save();
     ctx.strokeStyle = color || c.edge; ctx.lineWidth = 1.8;
     ctx.beginPath();
-    // Use a simple bezier if needed, else straight line
     if (Math.abs(x2 - x1) > 30) {
       const mx = (x1 + x2) / 2;
       ctx.moveTo(x1, y1);
@@ -850,20 +873,7 @@ const Builder = (() => {
     }
     ctx.stroke();
     
-    // Improved arrowhead for bezier: compute tangent at end
-    let angle;
-    if (Math.abs(x2 - x1) > 30) {
-      const mx = (x1 + x2) / 2;
-      // derivative of cubic bezier: B'(t) = 3(1-t)²(P1-P0) + 6(1-t)t(P2-P1) + 3t²(P3-P2)
-      // at t=1: 3(P3-P2) = 3*( (x2,y2) - (mx,y2) )
-      const tx = 3 * (x2 - mx);
-      const ty = 3 * (y2 - y2); // actually y2 - y2 = 0? Wait, P2 = (mx, y2), so P3-P2 = (x2-mx, y2-y2) = (x2-mx, 0)
-      // This is not perfect. A simpler approximation: angle from last segment
-      angle = Math.atan2(y2 - y1, x2 - x1); // Acceptable for demo
-    } else {
-      angle = Math.atan2(y2 - y1, x2 - x1);
-    }
-    
+    let angle = Math.atan2(y2 - y1, x2 - x1);
     const al = 10, aa = 0.45;
     ctx.beginPath(); ctx.moveTo(x2, y2);
     ctx.lineTo(x2 - al * Math.cos(angle - aa), y2 - al * Math.sin(angle - aa));
@@ -881,23 +891,19 @@ const Builder = (() => {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    // Grid pattern
-    ctx.fillStyle = isDark() ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.04)';
-    for (let x = 20; x < W; x += 30) for (let y = 20; y < H; y += 30) {
-      ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI * 2); ctx.fill();
-    }
+    // Draw cached grid background
+    const grid = getGridImage(W, H, 'builder');
+    ctx.drawImage(grid, 0, 0);
     
     edges.forEach(e => {
       const fn = nodes.find(n => n.id === e.from), tn = nodes.find(n => n.id === e.to);
       if (!fn || !tn) return;
-      // Use stored side information if available (we don't store sides yet, but could)
       const { x1, y1, x2, y2 } = getEdgePointsWithPorts(fn, tn);
       drawArrow(x1, y1, x2, y2, e.label, e.label === 'true', e.label === 'false');
     });
     
     nodes.forEach(n => drawNodeShape(n, n.id === selectedNode, connectFrom));
     
-    // Show connecting line if a port is selected
     if (connectFrom) {
       const fn = nodes.find(n => n.id === connectFrom.nodeId);
       if (fn) {
@@ -910,7 +916,7 @@ const Builder = (() => {
     }
   }
 
-  /* ---- INTERACTION (improved with touch support) ---- */
+  /* ---- INTERACTION ---- */
   function canvasXY(e) {
     const r = canvas.getBoundingClientRect();
     const src = e.touches ? e.touches[0] : e;
@@ -1102,12 +1108,13 @@ const Builder = (() => {
     setMode, setSelectedType(t) { selectedType = t; },
     get selectedType() { return selectedType; },
     updateNodeList, updateEdgeList,
+    openEditModal,
     get W() { return W; }, get H() { return H; }
   };
 })();
 
 /* ================================================================
-   EVALUATOR (unchanged)
+   EVALUATOR
 ================================================================ */
 const Evaluator = (() => {
   function resolveValue(token, memory) {
@@ -1153,7 +1160,7 @@ const Evaluator = (() => {
 })();
 
 /* ================================================================
-   SIMULATE RENDERER (unchanged)
+   SIMULATE RENDERER (with grid cache)
 ================================================================ */
 const Renderer = (() => {
   const canvas = document.getElementById('flowchart-canvas');
@@ -1170,6 +1177,10 @@ const Renderer = (() => {
     const par = canvas.parentElement;
     W = par.clientWidth; H = Math.max(440, W * 0.9);
     canvas.width = W; canvas.height = H;
+    // Invalidate grid cache
+    const isDark = !document.body.classList.contains('light-mode');
+    const key = 'sim' + (isDark ? '_dark' : '_light');
+    if (gridCache[key]) delete gridCache[key];
     draw();
   }
 
@@ -1255,6 +1266,10 @@ const Renderer = (() => {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
+    // Draw cached grid
+    const grid = getGridImage(W, H, 'sim');
+    ctx.drawImage(grid, 0, 0);
+    
     _edges.forEach(e => {
       const fn = _nodeMap[e.from], tn = _nodeMap[e.to];
       if (!fn || !tn) return;
@@ -1268,7 +1283,7 @@ const Renderer = (() => {
 })();
 
 /* ================================================================
-   ENGINE (updated for multi‑variable input)
+   ENGINE (non‑blocking Instant speed)
 ================================================================ */
 const Engine = (() => {
   let _nodeMap = {};
@@ -1342,8 +1357,13 @@ const Engine = (() => {
     step(() => {
       if (!State.finished && State.running) {
         const delay = parseInt(document.getElementById('speed-select').value);
-        if (delay === 0) { if (!State.stepCb) runAuto(); }
-        else { const t = setTimeout(() => { if (!State.stepCb) runAuto(); }, delay); State.setAnimTimer(t); }
+        if (delay === 0) {
+          // Non‑blocking: allow UI to breathe between steps
+          setTimeout(() => runAuto(), 0);
+        } else {
+          const t = setTimeout(() => runAuto(), delay);
+          State.setAnimTimer(t);
+        }
       }
     });
   }
@@ -1352,7 +1372,7 @@ const Engine = (() => {
 })();
 
 /* ================================================================
-   UI HANDLERS (updated for multi‑variable modal)
+   UI HANDLERS (multi‑variable modal)
 ================================================================ */
 const UI = (() => {
   const consoleEl = document.getElementById('console-body');
@@ -1367,7 +1387,6 @@ const UI = (() => {
   
   let firstLog = true;
   let inputCallback = null;
-  let inputVars = [];
 
   function log(type, msg) {
     if (firstLog) { consoleEl.innerHTML = ''; firstLog = false; }
@@ -1402,7 +1421,6 @@ const UI = (() => {
   function showInputModal(varList, callback) {
     const vars = varList.split(',').map(v => v.trim()).filter(Boolean);
     if (vars.length === 0) { callback({}); return; }
-    inputVars = vars;
     inputCallback = callback;
     document.getElementById('modal-title').textContent = 'Enter Values';
     document.getElementById('modal-desc').textContent = 'Provide values for the following variables.';
@@ -1426,7 +1444,7 @@ const UI = (() => {
     inputs.forEach(inp => {
       const varName = inp.dataset.var;
       const raw = inp.value.trim();
-      if (raw === '') return; // skip empty
+      if (raw === '') return;
       values[varName] = isNaN(parseFloat(raw)) ? raw : parseFloat(raw);
     });
     hideInputModal();
@@ -1435,8 +1453,12 @@ const UI = (() => {
       cb(values);
       if (State.running && !State.finished) {
         const delay = parseInt(document.getElementById('speed-select').value);
-        const t = setTimeout(() => Engine.runAuto(), Math.max(delay, 200));
-        State.setAnimTimer(t);
+        if (delay === 0) {
+          setTimeout(() => Engine.runAuto(), 0);
+        } else {
+          const t = setTimeout(() => Engine.runAuto(), Math.max(delay, 200));
+          State.setAnimTimer(t);
+        }
       }
     }
   }
@@ -1492,6 +1514,8 @@ const UI = (() => {
   document.getElementById('theme-btn').addEventListener('click', () => {
     const isLight = document.body.classList.toggle('light-mode');
     document.getElementById('theme-btn').textContent = isLight ? '🌙 Dark' : '☀ Light';
+    // Invalidate grid caches
+    gridCache = {};
     Renderer.draw(); Builder.draw();
   });
 
@@ -1501,7 +1525,7 @@ const UI = (() => {
 })();
 
 /* ================================================================
-   BUILDER UI WIRING (enhanced with drag‑and‑drop)
+   BUILDER UI WIRING (drag‑and‑drop)
 ================================================================ */
 document.querySelectorAll('.palette-node').forEach(el => {
   el.addEventListener('click', () => {
@@ -1511,7 +1535,6 @@ document.querySelectorAll('.palette-node').forEach(el => {
     el.classList.add('selected-tool');
   });
   
-  // Drag and drop
   el.addEventListener('dragstart', e => {
     e.dataTransfer.setData('text/plain', el.dataset.type);
     e.dataTransfer.effectAllowed = 'copy';
