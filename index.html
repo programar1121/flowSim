@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+  <title>FlowSim — Professional Flowchart Simulator</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    /* ============================================================
+       CSS VARIABLES & RESET (unchanged from original, except minor additions)
+    ============================================================ */
+    :root {
+      --bg: #0f1115;
+      --surface: #181a20;
+      --surface2: #22252d;
+      --surface3: #2d313c;
+      --border: #333845;
+      --accent: #3b82f6;
+      --accent2: #ef4444;
+      --accent3: #10b981;
+      --accent4: #f59e0b;
+      --text: #f8fafc;
+      --text2: #94a3b8;
+      --text3: #64748b;
+      --node-start: #10b981;
+      --node-end: #ef4444;
+      --node-process: #6366f1;
+      --node-decision: #f59e0b;
+      --node-input: #3b82f6;
+      --node-output: #a855f7;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+      --radius: 8px;
+      --spd: 0.2s;
+    }
+
+    .light-mode {
+      --bg: #f8fafc;
+      --surface: #ffffff;
+      --surface2: #f1f5f9;
+      --surface3: #e2e8f0;
+      --border: #cbd5e1;
+      --text: #0f172a;
+      --text2: #475569;
+      --text3: #64748b;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; }
+    body { 
+      font-family: 'Inter', sans-serif; 
+      background: var(--bg); 
+      color: var(--text); 
+      min-height: 100vh; 
+      transition: background var(--spd), color var(--spd); 
+      overflow-x: hidden; 
+    }
+
+    header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 200; box-shadow: var(--shadow-sm); }
+    .logo { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; color: var(--text); }
+    .logo .dot { color: var(--accent); }
+    .header-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .hdr-btn, .speed-wrap select { background: var(--surface2); border: 1px solid var(--border); color: var(--text2); border-radius: 6px; padding: 6px 12px; font-family: inherit; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all .2s; outline: none; }
+    .hdr-btn:hover { background: var(--surface3); color: var(--text); }
+    .speed-wrap select:focus, .hdr-btn:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+    .speed-wrap { display: flex; align-items: center; gap: 8px; }
+    .speed-wrap label { font-size: 0.8rem; color: var(--text3); font-weight: 500; }
+
+    .tabs { display: flex; gap: 16px; border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 24px; }
+    .tab-btn { padding: 12px 4px; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 600; background: none; border: none; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; margin-bottom: -1px; }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    .app { display: grid; grid-template-columns: 1fr; gap: 20px; padding: 20px 24px; max-width: 1600px; margin: 0 auto; }
+    @media(min-width: 900px){ .app { grid-template-columns: 1fr 340px; } .canvas-section { grid-row: 1/5; } }
+    @media(min-width: 1200px){ .app { grid-template-columns: 1fr 380px; } }
+
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+    .card-title { font-size: 0.75rem; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--text2); }
+    .card-body { padding: 16px; flex-grow: 1; }
+
+    .canvas-section .card-body { padding: 0; position: relative; }
+    #flowchart-canvas, #builder-canvas { width: 100%; display: block; min-height: 440px; cursor: default; touch-action: none; outline: none; }
+    #builder-canvas.builder-mode { cursor: crosshair; }
+    #builder-canvas.drag-mode { cursor: grabbing; }
+    #builder-canvas.connect-mode { cursor: cell; }
+
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { flex: 1; padding: 8px 16px; border: 1px solid transparent; border-radius: 6px; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all .15s; outline: none; }
+    .btn:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+    .btn:active { transform: translateY(1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .btn-run { background: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    .btn-run:hover:not(:disabled) { background: #2563eb; }
+    .btn-step { background: var(--surface3); color: var(--text); border-color: var(--border); }
+    .btn-step:hover:not(:disabled) { background: var(--border); }
+    .btn-reset { background: transparent; color: var(--text); border-color: var(--border); }
+    .btn-reset:hover:not(:disabled) { background: var(--surface3); color: var(--text); }
+
+    .btn-danger { background: rgba(239, 68, 68, 0.1); color: var(--accent2); border-color: rgba(239, 68, 68, 0.2); }
+    .btn-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.15); }
+    .btn-success { background: rgba(16, 185, 129, 0.1); color: var(--accent3); border-color: rgba(16, 185, 129, 0.2); }
+    .btn-success:hover:not(:disabled) { background: rgba(16, 185, 129, 0.15); }
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; flex: none; }
+
+    .memory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+    .mem-cell { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 10px; text-align: center; transition: all .3s; }
+    .mem-cell.updated { border-color: var(--accent); background: rgba(59, 130, 246, 0.1); animation: pulse-cell .4s ease; }
+    @keyframes pulse-cell { 0% { transform: scale(1); } 50% { transform: scale(1.04); } 100% { transform: scale(1); } }
+    .mem-key { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text3); margin-bottom: 4px; }
+    .mem-val { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 600; color: var(--text); }
+
+    .console-wrapper { background: #0f1115; border-radius: 6px; border: 1px solid var(--border); overflow: hidden; display: flex; flex-direction: column; }
+    .light-mode .console-wrapper { background: #1e293b; }
+    .console-body { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 12px; min-height: 120px; max-height: 200px; overflow-y: auto; scroll-behavior: smooth; color: #e2e8f0; }
+    .log-line { padding: 3px 0; animation: fadeSlide .3s ease; line-height: 1.6; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .log-line:last-child { border-bottom: none; }
+    @keyframes fadeSlide { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+    .log-line.info { color: #94a3b8; }
+    .log-line.input { color: #60a5fa; }
+    .log-line.output { color: #a855f7; }
+    .log-line.check { color: #fcd34d; }
+    .log-line.result { color: #34d399; }
+    .log-line.error { color: #f87171; }
+    .log-line.success { color: #34d399; font-weight: 600; }
+    .console-empty { color: var(--text3); font-style: italic; font-size: 0.85rem; text-align: center; display: block; margin-top: 8px; }
+
+    .status-bar { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--surface2); font-size: 0.8rem; color: var(--text2); font-weight: 500; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); transition: background .3s, box-shadow .3s; flex-shrink: 0; }
+    .status-dot.running { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
+    .status-dot.done { background: var(--accent2); }
+    .status-dot.waiting { background: var(--accent4); animation: blink 1.2s infinite; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .modal-overlay { position: fixed; inset: 0; background: rgba(15, 17, 21, 0.8); backdrop-filter: blur(4px); z-index: 1000; display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+    .modal-overlay.active { opacity: 1; pointer-events: all; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: min(420px, 92vw); box-shadow: var(--shadow-lg); transform: translateY(10px) scale(0.98); transition: all .2s ease; }
+    .modal-overlay.active .modal { transform: translateY(0) scale(1); }
+    .modal h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+    .modal p { font-size: 0.85rem; color: var(--text2); margin-bottom: 20px; line-height: 1.5; }
+    .modal label { font-size: 0.8rem; font-weight: 500; color: var(--text2); display: block; margin-bottom: 6px; margin-top: 16px; }
+    .modal input, .modal select, .modal textarea { width: 100%; padding: 10px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; outline: none; transition: border-color .2s, box-shadow .2s; }
+    .modal input:focus, .modal select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+    .btn-confirm { background: var(--accent); color: #fff; padding: 8px 20px; border-radius: 6px; border: none; font-family: 'Inter', sans-serif; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: background .2s; }
+    .btn-confirm:hover { background: #2563eb; }
+    .btn-cancel { background: transparent; color: var(--text2); padding: 8px 16px; border-radius: 6px; border: 1px solid var(--border); font-family: 'Inter', sans-serif; font-size: 0.85rem; cursor: pointer; transition: all .2s; }
+    .btn-cancel:hover { background: var(--surface2); color: var(--text); }
+
+    /* Modal input groups for multi‑variable */
+    .modal-input-group { margin-bottom: 12px; }
+    .modal-input-group label { margin-top: 0; margin-bottom: 4px; font-weight: 500; }
+    .modal-input-group input { margin-bottom: 0; }
+
+    .palette { display: flex; flex-wrap: wrap; gap: 8px; }
+    .palette-node { padding: 6px 12px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; cursor: grab; border: 1px solid transparent; transition: all .2s; user-select: none; display: flex; align-items: center; gap: 6px; background: var(--surface2); color: var(--text2); }
+    .palette-node:hover { background: var(--surface3); color: var(--text); }
+    .palette-node:active { cursor: grabbing; transform: scale(0.97); }
+    .palette-node.selected-tool { outline: 2px solid var(--accent); outline-offset: 1px; color: var(--text); }
+
+    .palette-node[data-type=start].selected-tool   { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); }
+    .palette-node[data-type=end].selected-tool     { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.3); }
+    .palette-node[data-type=process].selected-tool { background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); }
+    .palette-node[data-type=decision].selected-tool{ background: rgba(245, 158, 11, 0.15); border-color: rgba(245, 158, 11, 0.3); }
+    .palette-node[data-type=input].selected-tool   { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.3); }
+    .palette-node[data-type=output].selected-tool  { background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.3); }
+
+    .builder-hint { font-size: 0.8rem; color: var(--text2); background: var(--surface2); border-radius: 6px; padding: 12px; line-height: 1.6; border: 1px solid var(--border); }
+    .builder-hint b { color: var(--text); font-weight: 600; }
+
+    .node-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; padding-right: 4px; }
+    .node-list-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; gap: 8px; cursor: pointer; transition: all .2s; }
+    .node-list-item:hover { border-color: var(--text3); }
+    .node-list-item.selected { border-color: var(--accent); background: rgba(59, 130, 246, 0.08); }
+    .nli-left { display: flex; align-items: center; gap: 8px; }
+    .nli-badge { padding: 3px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .nli-actions { display: flex; gap: 4px; }
+    .nli-btn { background: none; border: none; cursor: pointer; color: var(--text3); font-size: 0.9rem; padding: 4px; border-radius: 4px; transition: color .15s, background .15s; }
+    .nli-btn:hover { background: var(--surface3); color: var(--text); }
+    .nli-btn[data-del]:hover { color: var(--accent2); background: rgba(239, 68, 68, 0.1); }
+
+    .edge-list { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding-right: 4px; }
+    .edge-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; font-size: 0.8rem; font-family: 'JetBrains Mono', monospace; color: var(--text2); }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 10px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text2); font-weight: 500; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+    .canvas-mode-badge { position: absolute; top: 12px; right: 12px; font-size: 0.75rem; font-weight: 600; padding: 6px 12px; border-radius: 6px; pointer-events: none; opacity: 0; transition: opacity .3s, transform .3s; transform: translateY(-4px); backdrop-filter: blur(4px); }
+    .canvas-mode-badge.visible { opacity: 1; transform: translateY(0); }
+    .badge-place { background: rgba(59, 130, 246, 0.2); color: var(--accent); border: 1px solid rgba(59, 130, 246, 0.3); }
+    .badge-connect { background: rgba(16, 185, 129, 0.2); color: var(--accent3); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-drag { background: rgba(245, 158, 11, 0.2); color: var(--accent4); border: 1px solid rgba(245, 158, 11, 0.3); }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+    .mt-2 { margin-top: 8px; }
+    .mt-3 { margin-top: 12px; }
+    .w-full { width: 100%; }
+    .flex-1 { flex: 1; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">⬡ Flow<span class="dot">Sim</span></div>
+  <div class="header-right">
+    <div class="speed-wrap">
+      <label for="speed-select">Speed</label>
+      <select id="speed-select">
+        <option value="900">Slow</option>
+        <option value="450" selected>Normal</option>
+        <option value="150">Fast</option>
+        <option value="0">Instant</option>
+      </select>
+    </div>
+    <button class="hdr-btn" id="theme-btn">☀ Light</button>
+  </div>
+</header>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab-btn active" data-tab="simulate">▶ Simulate</button>
+  <button class="tab-btn" data-tab="build">✏ Build</button>
+</div>
+
+<!-- ============================================================
+     SIMULATE TAB
+============================================================ -->
+<div class="tab-panel active" id="tab-simulate">
+<div class="app">
+
+  <!-- CANVAS -->
+  <div class="canvas-section card">
+    <div class="card-header">
+      <span class="card-title" id="canvas-label">Sample Flowchart</span>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="card-body">
+      <canvas id="flowchart-canvas"></canvas>
+    </div>
+    <div class="status-bar">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Ready — press Run or Step</span>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div style="display:flex;flex-direction:column;gap:20px">
+
+    <!-- CHART SELECTOR -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Active Chart</span></div>
+      <div class="card-body controls">
+        <button class="btn btn-step btn-sm flex-1" id="btn-use-sample" style="border-color: var(--accent); color: var(--accent)">📋 Sample</button>
+        <button class="btn btn-step btn-sm flex-1" id="btn-use-custom">✏ My Chart</button>
+      </div>
+    </div>
+
+    <!-- CONTROLS -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Controls</span></div>
+      <div class="card-body">
+        <div class="controls">
+          <button class="btn btn-run" id="btn-run">▶ Run</button>
+          <button class="btn btn-step" id="btn-step">⏭ Step</button>
+          <button class="btn btn-reset" id="btn-reset">🔁 Reset</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MEMORY -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Memory State</span>
+        <span style="font-size: 0.75rem; color: var(--text3); font-family: 'JetBrains Mono', monospace" id="mem-label">{ }</span>
+      </div>
+      <div class="card-body">
+        <div class="memory-grid" id="memory-grid">
+          <span class="console-empty">No variables initialized</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONSOLE -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Output Console</span>
+        <button onclick="UI.clearConsole()" class="nli-btn" style="font-size: 0.8rem">✕ Clear</button>
+      </div>
+      <div class="card-body" style="padding-top: 12px;">
+        <div class="console-wrapper">
+          <div class="console-body" id="console-body">
+            <span class="console-empty">Console output will appear here...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div><!-- /tab-simulate -->
+
+<!-- ============================================================
+     BUILD TAB
+============================================================ -->
+<div class="tab-panel" id="tab-build">
+<div class="app">
+
+  <!-- BUILDER CANVAS -->
+  <div class="canvas-section card">
+    <div class="card-header">
+      <span class="card-title">Canvas</span>
+      <div class="controls">
+        <button class="btn btn-sm btn-step" id="build-mode-place" title="Place mode">✚ Place</button>
+        <button class="btn btn-sm btn-step" id="build-mode-connect" title="Connect mode">↔ Connect</button>
+        <button class="btn btn-sm btn-step" id="build-mode-drag" title="Move mode">✥ Move</button>
+      </div>
+    </div>
+    <div class="card-body" style="position:relative">
+      <canvas id="builder-canvas"></canvas>
+      <div class="canvas-mode-badge" id="mode-badge"></div>
+    </div>
+    <div class="status-bar">
+      <div class="status-dot" id="build-status-dot"></div>
+      <span id="build-status-text">Select a node type, then click canvas to place</span>
+    </div>
+  </div>
+
+  <!-- BUILDER RIGHT PANEL -->
+  <div style="display:flex;flex-direction:column;gap:20px">
+
+    <!-- PALETTE -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Node Palette</span></div>
+      <div class="card-body">
+        <div class="palette" id="palette">
+          <div class="palette-node" draggable="true" data-type="start">● Start</div>
+          <div class="palette-node" draggable="true" data-type="end">■ End</div>
+          <div class="palette-node" draggable="true" data-type="process">▬ Process</div>
+          <div class="palette-node" draggable="true" data-type="decision">◆ Decision</div>
+          <div class="palette-node" draggable="true" data-type="input">▷ Input</div>
+          <div class="palette-node" draggable="true" data-type="output">◁ Output</div>
+        </div>
+        <div class="builder-hint mt-3">
+          <b>Place:</b> Drag from palette or select & click<br>
+          <b>Connect:</b> Click a dot on source → dot on target<br>
+          <b>Move:</b> Drag any node<br>
+          <b>Edit:</b> Double‑click any node<br>
+          <b>Delete:</b> Select node → press Del
+        </div>
+      </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Actions</span></div>
+      <div class="card-body">
+        <div class="controls">
+          <button class="btn btn-sm btn-danger" id="build-clear">🗑 Clear All</button>
+          <button class="btn btn-sm btn-success" id="build-use">▶ Run Chart</button>
+        </div>
+        <div class="mt-2 controls">
+          <button class="btn btn-sm btn-step w-full" id="build-load-sample">📋 Load Sample Chart</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- NODE LIST -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Nodes</span>
+        <span style="font-size: 0.75rem; color: var(--text3)" id="node-count">0 nodes</span>
+      </div>
+      <div class="card-body" style="padding: 12px">
+        <div class="node-list" id="node-list">
+          <span class="console-empty">No nodes placed yet.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- EDGE LIST -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Connections</span>
+        <span style="font-size: 0.75rem; color: var(--text3)" id="edge-count">0 edges</span>
+      </div>
+      <div class="card-body" style="padding: 12px">
+        <div class="edge-list" id="edge-list">
+          <span class="console-empty">No connections yet.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div><!-- /tab-build -->
+
+<!-- ============================================================ INPUT MODAL (multi‑variable) -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">Enter Values</h3>
+    <p id="modal-desc">Provide values for the following variables.</p>
+    <div id="modal-input-container"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="modal-cancel">Cancel</button>
+      <button class="btn-confirm" id="modal-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ NODE EDIT MODAL -->
+<div class="modal-overlay" id="edit-overlay">
+  <div class="modal">
+    <h3>Edit Node</h3>
+    <p>Configure this node's properties.</p>
+    <label>Node Type</label>
+    <select id="edit-type">
+      <option value="start">Start</option>
+      <option value="end">End</option>
+      <option value="process">Process (e.g. x = x + 1)</option>
+      <option value="decision">Decision (e.g. x > 5)</option>
+      <option value="input">Input (comma‑separated variables, e.g. x, y)</option>
+      <option value="output">Output (displays value)</option>
+    </select>
+    <label>Label</label>
+    <input type="text" id="edit-label" placeholder="Node label"/>
+    <div id="edit-extra"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="edit-cancel">Cancel</button>
+      <button class="btn-confirm" id="edit-confirm">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ CONNECT LABEL MODAL -->
+<div class="modal-overlay" id="connect-overlay">
+  <div class="modal">
+    <h3>Connection Label</h3>
+    <p id="connect-desc">Set label for this connection.</p>
+    <label>Label (optional)</label>
+    <select id="connect-label-select">
+      <option value="">— none —</option>
+      <option value="true">true (Decision TRUE branch)</option>
+      <option value="false">false (Decision FALSE branch)</option>
+      <option value="yes">yes</option>
+      <option value="no">no</option>
+    </select>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="connect-cancel">Cancel</button>
+      <button class="btn-confirm" id="connect-confirm">Add Connection</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== Polyfill for roundRect ====================
+CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+  if (w < 2 * r) r = w / 2;
+  if (h < 2 * r) r = h / 2;
+  this.moveTo(x + r, y);
+  this.lineTo(x + w - r, y);
+  this.quadraticCurveTo(x + w, y, x + w, y + r);
+  this.lineTo(x + w, y + h - r);
+  this.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  this.lineTo(x + r, y + h);
+  this.quadraticCurveTo(x, y + h, x, y + h - r);
+  this.lineTo(x, y + r);
+  this.quadraticCurveTo(x, y, x + r, y);
+  return this;
+};
+
+/* ================================================================
+   SHARED DATA: NODE COLORS & SIZES
+================================================================ */
+const NODE_COLORS = {
+  start: '#10b981', end: '#ef4444', process: '#6366f1',
+  decision: '#f59e0b', input: '#3b82f6', output: '#a855f7'
+};
+const NODE_W = 140, NODE_H = 48, DIAMOND_W = 156, DIAMOND_H = 68;
+const PORT_RADIUS = 5;
+
+/* ================================================================
+   SAMPLE FLOWCHART (updated to demo multi‑variable input)
+================================================================ */
+const SAMPLE_FLOWCHART = {
+  nodes:[
+    { id:'start',     type:'start',    label:'Start',         x:.5,  y:.05, next:'inp_xy' },
+    { id:'inp_xy',    type:'input',    label:'Input x, y',    x:.5,  y:.20, variable:'x, y', next:'dec1' },
+    { id:'dec1',      type:'decision', label:'x > 5 ?',       x:.5,  y:.38, condition:'x > 5', trueBranch:'out_big', falseBranch:'out_small' },
+    { id:'out_big',   type:'output',   label:'Output "Big"',  x:.78, y:.57, value:'"Big"', next:'end' },
+    { id:'out_small', type:'output',   label:'Output "Small"',x:.22, y:.57, value:'"Small"', next:'end' },
+    { id:'end',       type:'end',      label:'End',           x:.5,  y:.76 }
+  ],
+  edges:[
+    { from:'start',     to:'inp_xy',    label:'' },
+    { from:'inp_xy',    to:'dec1',      label:'' },
+    { from:'dec1',      to:'out_big',   label:'true' },
+    { from:'dec1',      to:'out_small', label:'false' },
+    { from:'out_big',   to:'end',       label:'' },
+    { from:'out_small', to:'end',       label:'' },
+  ]
+};
+
+/* ================================================================
+   STATE (unchanged except minor additions)
+================================================================ */
+const State = (() => {
+  let _memory = {}, _current = null, _running = false, _finished = false;
+  let _stepCb = null, _highlight = null, _animTimer = null, _speed = 450;
+  let _activeChart = 'sample';
+
+  return {
+    get memory() { return _memory; }, get current() { return _current; },
+    get running() { return _running; }, get finished() { return _finished; },
+    get stepCb() { return _stepCb; }, get highlight() { return _highlight; },
+    get animTimer() { return _animTimer; }, get speed() { return _speed; },
+    get activeChart() { return _activeChart; },
+    setMemory(k,v) { _memory[k] = v; }, setCurrent(id) { _current = id; },
+    setRunning(v) { _running = v; }, setFinished(v) { _finished = v; },
+    setStepCb(fn) { _stepCb = fn; }, setHighlight(id) { _highlight = id; },
+    setAnimTimer(t) { _animTimer = t; }, setSpeed(v) { _speed = v; },
+    setActiveChart(v) { _activeChart = v; },
+    reset() {
+      _memory = {}; _current = null; _running = false; _finished = false;
+      _stepCb = null; _highlight = null;
+      if (_animTimer) clearTimeout(_animTimer); _animTimer = null;
+    }
+  };
+})();
+
+/* ================================================================
+   BUILDER STATE (enhanced with port‑based connections)
+================================================================ */
+const Builder = (() => {
+  let nodes = [];
+  let edges = [];
+  let selectedNode = null;
+  let connectFrom = null;      // { nodeId, side } or null
+  let mode = 'place';
+  let selectedType = 'start';
+  let dragNode = null, dragOffX = 0, dragOffY = 0;
+  let idCounter = 1;
+
+  const canvas = document.getElementById('builder-canvas');
+  const ctx = canvas.getContext('2d');
+  let W = 0, H = 0;
+
+  function genId(type) { return type + '_' + (idCounter++); }
+
+  function resize() {
+    const par = canvas.parentElement;
+    W = par.clientWidth; H = Math.max(440, W * 0.9);
+    canvas.width = W; canvas.height = H;
+    draw();
+  }
+
+  // Returns node and side if a port is clicked, else node if body clicked
+  function getHitInfo(px, py) {
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      const nx = n.x * W, ny = n.y * H;
+      const hw = n.type === 'decision' ? DIAMOND_W/2 : NODE_W/2;
+      const hh = n.type === 'decision' ? DIAMOND_H/2 : NODE_H/2;
+      
+      // Check ports first (only in connect mode)
+      if (mode === 'connect') {
+        const ports = getPortPositions(n);
+        for (const [side, pos] of Object.entries(ports)) {
+          const dx = px - pos.x, dy = py - pos.y;
+          if (Math.sqrt(dx*dx + dy*dy) <= PORT_RADIUS + 3) {
+            return { node: n, side };
+          }
+        }
+      }
+      
+      // Then check body (using bounding box)
+      if (n.type === 'decision') {
+        if (Math.abs(px - nx)/hw + Math.abs(py - ny)/hh <= 1) return { node: n };
+      } else {
+        const margin = 14;
+        if (px >= nx - hw - margin && px <= nx + hw + margin && py >= ny - hh && py <= ny + hh) {
+          return { node: n };
+        }
+      }
+    }
+    return null;
+  }
+
+  function getPortPositions(node) {
+    const nx = node.x * W, ny = node.y * H;
+    let hw = NODE_W/2, hh = NODE_H/2;
+    if (node.type === 'decision') { hw = DIAMOND_W/2; hh = DIAMOND_H/2; }
+    return {
+      top:    { x: nx, y: ny - hh },
+      right:  { x: nx + hw, y: ny },
+      bottom: { x: nx, y: ny + hh },
+      left:   { x: nx - hw, y: ny }
+    };
+  }
+
+  function setMode(m) {
+    mode = m; 
+    connectFrom = null;
+    canvas.className = m === 'place' ? 'builder-mode' : (m === 'connect' ? 'connect-mode' : '');
+    
+    const badge = document.getElementById('mode-badge');
+    badge.className = 'canvas-mode-badge visible ' + (m === 'place' ? 'badge-place' : m === 'connect' ? 'badge-connect' : 'badge-drag');
+    badge.textContent = m === 'place' ? '✚ Place Mode' : m === 'connect' ? '↔ Connect Mode' : '✥ Move Mode';
+    
+    document.getElementById('build-status-text').textContent =
+      m === 'place' ? 'Select node type from palette, then click canvas to place' :
+      m === 'connect' ? 'Click a dot (port) on source node, then dot on target node' :
+      'Drag any node to reposition';
+      
+    ['place', 'connect', 'drag'].forEach(x => {
+      const btn = document.getElementById('build-mode-' + x);
+      if (btn) {
+        btn.style.borderColor = x === m ? 'var(--accent)' : '';
+        btn.style.color = x === m ? 'var(--accent)' : '';
+      }
+    });
+    updateStatusDot(m === 'connect' ? 'waiting' : '');
+    draw();
+  }
+
+  function updateStatusDot(cls) {
+    document.getElementById('build-status-dot').className = 'status-dot ' + cls;
+  }
+
+  function addNode(type, px, py) {
+    const node = {
+      id: genId(type), type, label: defaultLabel(type),
+      x: px / W, y: py / H,
+      variable: type === 'input' ? 'x' : undefined,
+      value: type === 'output' ? '"result"' : type === 'process' ? 'x = x + 1' : undefined,
+      condition: type === 'decision' ? 'x > 0' : undefined,
+      next: undefined, trueBranch: undefined, falseBranch: undefined
+    };
+    nodes.push(node);
+    selectedNode = node.id;
+    updateNodeList(); draw();
+    return node;
+  }
+
+  function defaultLabel(type) {
+    return { start: 'Start', end: 'End', process: 'Process', decision: 'Decision?', input: 'Input', output: 'Output' }[type] || type;
+  }
+
+  function removeNode(id) {
+    nodes = nodes.filter(n => n.id !== id);
+    edges = edges.filter(e => e.from !== id && e.to !== id);
+    nodes.forEach(n => {
+      if (n.next === id) n.next = undefined;
+      if (n.trueBranch === id) n.trueBranch = undefined;
+      if (n.falseBranch === id) n.falseBranch = undefined;
+    });
+    if (selectedNode === id) selectedNode = null;
+    updateNodeList(); updateEdgeList(); draw();
+  }
+
+  function addEdge(fromId, toId, label) {
+    if (edges.find(e => e.from === fromId && e.to === toId)) return;
+    const fromNode = nodes.find(n => n.id === fromId);
+    if (fromNode && fromNode.type === 'decision') {
+      if (!label || (label !== 'true' && label !== 'false')) {
+        alert('Decision nodes require a label of "true" or "false".');
+        return;
+      }
+    }
+    edges.push({ from: fromId, to: toId, label: label || '' });
+    const fn = nodes.find(n => n.id === fromId);
+    if (fn) {
+      if (fn.type === 'decision') {
+        if (label === 'true') fn.trueBranch = toId;
+        else if (label === 'false') fn.falseBranch = toId;
+        else { if (!fn.trueBranch) fn.trueBranch = toId; else fn.falseBranch = toId; }
+      } else {
+        fn.next = toId;
+      }
+    }
+    updateEdgeList(); draw();
+  }
+
+  function removeEdge(idx) {
+    const e = edges[idx];
+    if (!e) return;
+    const fn = nodes.find(n => n.id === e.from);
+    if (fn) {
+      if (fn.next === e.to) fn.next = undefined;
+      if (fn.trueBranch === e.to) fn.trueBranch = undefined;
+      if (fn.falseBranch === e.to) fn.falseBranch = undefined;
+    }
+    edges.splice(idx, 1);
+    updateEdgeList(); draw();
+  }
+
+  function openEditModal(nodeId) {
+    const n = nodes.find(x => x.id === nodeId); 
+    if (!n) return;
+    const ov = document.getElementById('edit-overlay');
+    document.getElementById('edit-type').value = n.type;
+    document.getElementById('edit-label').value = n.label;
+    updateEditExtra(n.type, n);
+    document.getElementById('edit-type').onchange = () => updateEditExtra(document.getElementById('edit-type').value, n);
+    ov.classList.add('active');
+    
+    document.getElementById('edit-confirm').onclick = () => {
+      n.type = document.getElementById('edit-type').value;
+      n.label = document.getElementById('edit-label').value || defaultLabel(n.type);
+      const ve = document.getElementById('edit-val-input');
+      const co = document.getElementById('edit-cond-input');
+      const va = document.getElementById('edit-var-input');
+      if (ve) n.value = ve.value;
+      if (co) n.condition = co.value;
+      if (va) n.variable = va.value;
+      ov.classList.remove('active');
+      updateNodeList(); draw();
+    };
+    document.getElementById('edit-cancel').onclick = () => ov.classList.remove('active');
+  }
+
+  function updateEditExtra(type, node) {
+    const el = document.getElementById('edit-extra'); 
+    el.innerHTML = '';
+    if (type === 'process') {
+      el.innerHTML = `<label>Expression (e.g. x = x + 1)</label><input id="edit-val-input" type="text" value="${node.value||'x = x + 1'}" placeholder="x = x + 1"/>`;
+    } else if (type === 'decision') {
+      el.innerHTML = `<label>Condition (e.g. x > 5)</label><input id="edit-cond-input" type="text" value="${node.condition||'x > 5'}" placeholder="x > 5"/>`;
+    } else if (type === 'input') {
+      el.innerHTML = `<label>Variable(s) (comma‑separated)</label><input id="edit-var-input" type="text" value="${node.variable||'x'}" placeholder="x, y"/>`;
+    } else if (type === 'output') {
+      el.innerHTML = `<label>Value / expression (e.g. x, "Hello")</label><input id="edit-val-input" type="text" value="${node.value||'"result"'}" placeholder='"result"'/>`;
+    }
+  }
+
+  function isDark() { return !document.body.classList.contains('light-mode'); }
+  function themeColors() {
+    return isDark()
+      ? { edge: '#475569', edgeLbl: '#94a3b8', text: '#f8fafc' }
+      : { edge: '#94a3b8', edgeLbl: '#64748b', text: '#0f172a' };
+  }
+
+  function drawNodeShape(n, isSelected, isConnFrom) {
+    const c = themeColors();
+    const col = NODE_COLORS[n.type] || '#888';
+    const nx = n.x * W, ny = n.y * H;
+    const isHL = isSelected || (isConnFrom && isConnFrom.nodeId === n.id);
+    
+    ctx.save();
+    if (isHL) { ctx.shadowColor = col; ctx.shadowBlur = isConnFrom ? 16 : 12; }
+
+    if (n.type === 'decision') {
+      const hw = DIAMOND_W / 2, hh = DIAMOND_H / 2;
+      ctx.beginPath(); ctx.moveTo(nx, ny - hh); ctx.lineTo(nx + hw, ny); ctx.lineTo(nx, ny + hh); ctx.lineTo(nx - hw, ny); ctx.closePath();
+      ctx.fillStyle = isHL ? col + '25' : col + '15'; ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = isHL ? 2.5 : 1.8; ctx.stroke();
+    } else if (n.type === 'start' || n.type === 'end') {
+      const hw = NODE_W / 2, hh = NODE_H / 2;
+      ctx.beginPath(); ctx.roundRect(nx - hw, ny - hh, NODE_W, NODE_H, hh);
+      if (isHL) { ctx.fillStyle = col; ctx.fill(); }
+      else { ctx.fillStyle = col + '15'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 1.8; ctx.stroke(); }
+    } else {
+      const hw = NODE_W / 2, hh = NODE_H / 2, sk = 12;
+      ctx.beginPath();
+      if (n.type === 'input' || n.type === 'output') {
+        ctx.moveTo(nx - hw + sk, ny - hh); ctx.lineTo(nx + hw + sk, ny - hh); ctx.lineTo(nx + hw - sk, ny + hh); ctx.lineTo(nx - hw - sk, ny + hh); ctx.closePath();
+      } else {
+        ctx.roundRect(nx - hw, ny - hh, NODE_W, NODE_H, 6);
+      }
+      ctx.fillStyle = isHL ? col + '25' : col + '15'; ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = isHL ? 2.5 : 1.8; ctx.stroke();
+    }
+    
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = isHL ? (n.type === 'start' || n.type === 'end' ? '#fff' : c.text) : c.text;
+    ctx.font = `${isHL ? '600' : '500'} 13px 'Inter', sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(n.label, nx, ny);
+    
+    // Draw connection ports if in connect mode
+    if (mode === 'connect') {
+      const ports = getPortPositions(n);
+      ctx.fillStyle = '#94a3b8';
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      Object.values(ports).forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, PORT_RADIUS, 0, 2*Math.PI);
+        ctx.fill();
+        ctx.stroke();
+      });
+    }
+    
+    ctx.restore();
+  }
+
+  function getEdgePointsWithPorts(fn, tn, fromSide, toSide) {
+    const fnPos = getPortPositions(fn);
+    const tnPos = getPortPositions(tn);
+    // Use sides if available, else compute default
+    let p1 = fromSide ? fnPos[fromSide] : (fnPos.right || fnPos.bottom);
+    let p2 = toSide ? tnPos[toSide] : (tnPos.left || tnPos.top);
+    if (!p1 || !p2) {
+      // fallback to old method
+      return getEdgePtsFallback(fn, tn);
+    }
+    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  }
+
+  function getEdgePtsFallback(fn, tn) {
+    const fx = fn.x * W, fy = fn.y * H, tx = tn.x * W, ty = tn.y * H;
+    const fhh = (fn.type === 'decision') ? DIAMOND_H / 2 : NODE_H / 2;
+    const thh = (tn.type === 'decision') ? DIAMOND_H / 2 : NODE_H / 2;
+    const fhw = (fn.type === 'decision') ? DIAMOND_W / 2 : NODE_W / 2 + 14;
+    const thw = (tn.type === 'decision') ? DIAMOND_W / 2 : NODE_W / 2 + 14;
+    let x1, y1, x2, y2;
+    if (Math.abs(tx - fx) < 24) { x1 = fx; y1 = fy + fhh; x2 = tx; y2 = ty - thh; }
+    else if (tx > fx) { x1 = fx + fhw; y1 = fy; x2 = tx - thw; y2 = ty; }
+    else { x1 = fx - fhw; y1 = fy; x2 = tx + thw; y2 = ty; }
+    return { x1, y1, x2, y2 };
+  }
+
+  function drawArrow(x1, y1, x2, y2, label, isTrue, isFalse, color) {
+    const c = themeColors();
+    ctx.save();
+    ctx.strokeStyle = color || c.edge; ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    // Use a simple bezier if needed, else straight line
+    if (Math.abs(x2 - x1) > 30) {
+      const mx = (x1 + x2) / 2;
+      ctx.moveTo(x1, y1);
+      ctx.bezierCurveTo(mx, y1, mx, y2, x2, y2);
+    } else {
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+    }
+    ctx.stroke();
+    
+    // Improved arrowhead for bezier: compute tangent at end
+    let angle;
+    if (Math.abs(x2 - x1) > 30) {
+      const mx = (x1 + x2) / 2;
+      // derivative of cubic bezier: B'(t) = 3(1-t)²(P1-P0) + 6(1-t)t(P2-P1) + 3t²(P3-P2)
+      // at t=1: 3(P3-P2) = 3*( (x2,y2) - (mx,y2) )
+      const tx = 3 * (x2 - mx);
+      const ty = 3 * (y2 - y2); // actually y2 - y2 = 0? Wait, P2 = (mx, y2), so P3-P2 = (x2-mx, y2-y2) = (x2-mx, 0)
+      // This is not perfect. A simpler approximation: angle from last segment
+      angle = Math.atan2(y2 - y1, x2 - x1); // Acceptable for demo
+    } else {
+      angle = Math.atan2(y2 - y1, x2 - x1);
+    }
+    
+    const al = 10, aa = 0.45;
+    ctx.beginPath(); ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - al * Math.cos(angle - aa), y2 - al * Math.sin(angle - aa));
+    ctx.lineTo(x2 - al * Math.cos(angle + aa), y2 - al * Math.sin(angle + aa));
+    ctx.closePath(); ctx.fillStyle = color || c.edge; ctx.fill();
+    
+    if (label) {
+      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2 - 12;
+      ctx.font = '600 11px JetBrains Mono, monospace';
+      ctx.fillStyle = isTrue ? '#10b981' : isFalse ? '#ef4444' : c.edgeLbl;
+      ctx.textAlign = 'center'; ctx.fillText(label, mx, my);
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // Grid pattern
+    ctx.fillStyle = isDark() ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.04)';
+    for (let x = 20; x < W; x += 30) for (let y = 20; y < H; y += 30) {
+      ctx.beginPath(); ctx.arc(x, y, 1.5, 0, Math.PI * 2); ctx.fill();
+    }
+    
+    edges.forEach(e => {
+      const fn = nodes.find(n => n.id === e.from), tn = nodes.find(n => n.id === e.to);
+      if (!fn || !tn) return;
+      // Use stored side information if available (we don't store sides yet, but could)
+      const { x1, y1, x2, y2 } = getEdgePointsWithPorts(fn, tn);
+      drawArrow(x1, y1, x2, y2, e.label, e.label === 'true', e.label === 'false');
+    });
+    
+    nodes.forEach(n => drawNodeShape(n, n.id === selectedNode, connectFrom));
+    
+    // Show connecting line if a port is selected
+    if (connectFrom) {
+      const fn = nodes.find(n => n.id === connectFrom.nodeId);
+      if (fn) {
+        const portPos = getPortPositions(fn)[connectFrom.side];
+        if (portPos) {
+          ctx.save(); ctx.strokeStyle = 'rgba(16, 185, 129, 0.6)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 5]);
+          ctx.beginPath(); ctx.moveTo(portPos.x, portPos.y); ctx.lineTo(portPos.x + 40, portPos.y); ctx.stroke(); ctx.restore();
+        }
+      }
+    }
+  }
+
+  /* ---- INTERACTION (improved with touch support) ---- */
+  function canvasXY(e) {
+    const r = canvas.getBoundingClientRect();
+    const src = e.touches ? e.touches[0] : e;
+    return { px: src.clientX - r.left, py: src.clientY - r.top };
+  }
+
+  function handleCanvasClick(e) {
+    if (dragNode) return;
+    const { px, py } = canvasXY(e);
+    const hit = getHitInfo(px, py);
+
+    if (mode === 'place') {
+      if (!hit) {
+        const n = addNode(selectedType, px, py);
+        openEditModal(n.id);
+      } else {
+        selectedNode = hit.node.id; draw();
+      }
+    } else if (mode === 'connect') {
+      if (hit) {
+        if (!connectFrom) {
+          connectFrom = { nodeId: hit.node.id, side: hit.side };
+          document.getElementById('build-status-text').textContent = `Connected from "${hit.node.label}" (${hit.side}) — click target port`;
+          draw();
+        } else if (hit.node.id !== connectFrom.nodeId) {
+          const fromNode = nodes.find(n => n.id === connectFrom.nodeId);
+          const toNode = hit.node;
+          const ov = document.getElementById('connect-overlay');
+          document.getElementById('connect-desc').textContent = `From "${fromNode.label}" (${connectFrom.side}) → "${toNode.label}" (${hit.side})`;
+          ov.classList.add('active');
+          
+          document.getElementById('connect-confirm').onclick = () => {
+            const lbl = document.getElementById('connect-label-select').value;
+            addEdge(connectFrom.nodeId, toNode.id, lbl);
+            connectFrom = null;
+            ov.classList.remove('active');
+            document.getElementById('build-status-text').textContent = 'Connection added! Click a port to start next connection.';
+            draw();
+          };
+          document.getElementById('connect-cancel').onclick = () => {
+            connectFrom = null; ov.classList.remove('active'); draw();
+          };
+        } else {
+          connectFrom = null; draw();
+        }
+      } else {
+        connectFrom = null; draw();
+      }
+    } else if (mode === 'drag') {
+      selectedNode = hit ? hit.node.id : null; draw();
+    }
+  }
+
+  canvas.addEventListener('click', handleCanvasClick);
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleCanvasClick(e); }, {passive: false});
+
+  canvas.addEventListener('dblclick', e => {
+    const { px, py } = canvasXY(e);
+    const hit = getHitInfo(px, py);
+    if (hit) openEditModal(hit.node.id);
+  });
+
+  function handleDragStart(e) {
+    if (mode !== 'drag') return;
+    const { px, py } = canvasXY(e);
+    const hit = getHitInfo(px, py);
+    if (hit) {
+      dragNode = hit.node; dragOffX = px - hit.node.x * W; dragOffY = py - hit.node.y * H;
+      canvas.className = 'drag-mode';
+    }
+  }
+
+  function handleDragMove(e) {
+    if (!dragNode) return;
+    e.preventDefault();
+    const { px, py } = canvasXY(e);
+    dragNode.x = Math.max(0.04, Math.min(0.96, (px - dragOffX) / W));
+    dragNode.y = Math.max(0.04, Math.min(0.96, (py - dragOffY) / H));
+    draw();
+  }
+
+  function handleDragEnd() {
+    if (dragNode) { dragNode = null; canvas.className = mode === 'drag' ? '' : mode + '-mode'; }
+  }
+
+  canvas.addEventListener('mousedown', handleDragStart);
+  canvas.addEventListener('mousemove', handleDragMove);
+  canvas.addEventListener('mouseup', handleDragEnd);
+  canvas.addEventListener('mouseleave', handleDragEnd);
+  
+  canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleDragStart(e); }, {passive: false});
+  canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleDragMove(e); }, {passive: false});
+  canvas.addEventListener('touchend', handleDragEnd);
+  canvas.addEventListener('touchcancel', handleDragEnd);
+
+  document.addEventListener('keydown', e => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNode && document.activeElement === document.body) {
+      if (document.querySelector('.modal-overlay.active')) return;
+      removeNode(selectedNode);
+    }
+  });
+
+  function typeColor(t) { return NODE_COLORS[t] || '#888'; }
+
+  function updateNodeList() {
+    const el = document.getElementById('node-list');
+    document.getElementById('node-count').textContent = nodes.length + ' node' + (nodes.length !== 1 ? 's' : '');
+    if (!nodes.length) { el.innerHTML = '<span class="console-empty">No nodes placed yet.</span>'; return; }
+    el.innerHTML = '';
+    nodes.forEach(n => {
+      const item = document.createElement('div');
+      item.className = 'node-list-item' + (n.id === selectedNode ? ' selected' : '');
+      item.innerHTML = `
+        <div class="nli-left">
+          <span class="nli-badge" style="background:${typeColor(n.type)}25; color:${typeColor(n.type)}">${n.type}</span>
+          <span>${n.label}</span>
+        </div>
+        <div class="nli-actions">
+          <button class="nli-btn" title="Edit" data-edit="${n.id}">✎</button>
+          <button class="nli-btn" title="Delete" data-del="${n.id}">✕</button>
+        </div>`;
+      item.addEventListener('click', ev => {
+        const editBtn = ev.target.closest('[data-edit]');
+        const delBtn = ev.target.closest('[data-del]');
+        if (editBtn) { openEditModal(editBtn.dataset.edit); return; }
+        if (delBtn) { removeNode(delBtn.dataset.del); return; }
+        selectedNode = n.id; draw();
+        document.querySelectorAll('.node-list-item').forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+      });
+      el.appendChild(item);
+    });
+  }
+
+  function updateEdgeList() {
+    const el = document.getElementById('edge-list');
+    document.getElementById('edge-count').textContent = edges.length + ' edge' + (edges.length !== 1 ? 's' : '');
+    if (!edges.length) { el.innerHTML = '<span class="console-empty">No connections yet.</span>'; return; }
+    el.innerHTML = '';
+    edges.forEach((e, i) => {
+      const fn = nodes.find(n => n.id === e.from), tn = nodes.find(n => n.id === e.to);
+      const item = document.createElement('div');
+      item.className = 'edge-item';
+      item.innerHTML = `
+        <span>${fn ? fn.label : '?'} → ${tn ? tn.label : '?'}${e.label ? ' <span style="color:var(--text3)">(' + e.label + ')</span>' : ''}</span>
+        <button class="nli-btn" data-eidx="${i}" title="Remove">✕</button>`;
+      item.querySelector('[data-eidx]').addEventListener('click', () => removeEdge(i));
+      el.appendChild(item);
+    });
+  }
+
+  function loadSample() {
+    nodes = []; edges = []; idCounter = 1;
+    SAMPLE_FLOWCHART.nodes.forEach(n => nodes.push({ ...n }));
+    SAMPLE_FLOWCHART.edges.forEach(e => edges.push({ ...e }));
+    selectedNode = null; connectFrom = null;
+    updateNodeList(); updateEdgeList(); draw();
+  }
+
+  function clearAll() {
+    nodes = []; edges = []; selectedNode = null; connectFrom = null;
+    updateNodeList(); updateEdgeList(); draw();
+  }
+
+  function getChart() {
+    const nodeMap = {};
+    nodes.forEach(n => nodeMap[n.id] = n);
+    return { nodes:[...nodes], edges: [...edges], nodeMap };
+  }
+
+  function isValid() {
+    const startN = nodes.filter(n => n.type === 'start');
+    const endN = nodes.filter(n => n.type === 'end');
+    const errors = [];
+    if (startN.length === 0) errors.push('No Start node found.');
+    if (startN.length > 1) errors.push('Multiple Start nodes found.');
+    if (endN.length === 0) errors.push('No End node found.');
+    nodes.filter(n => n.type === 'decision').forEach(n => {
+      if (!n.trueBranch && !n.falseBranch) errors.push(`Decision "${n.label}" has no branches connected.`);
+    });
+    return errors;
+  }
+
+  return {
+    resize, draw, getChart, isValid, clearAll, loadSample,
+    get nodes() { return nodes; },
+    get edges() { return edges; },
+    get mode() { return mode; },
+    setMode, setSelectedType(t) { selectedType = t; },
+    get selectedType() { return selectedType; },
+    updateNodeList, updateEdgeList,
+    get W() { return W; }, get H() { return H; }
+  };
+})();
+
+/* ================================================================
+   EVALUATOR (unchanged)
+================================================================ */
+const Evaluator = (() => {
+  function resolveValue(token, memory) {
+    if (token === undefined || token === null) return 0;
+    const s = String(token).trim();
+    if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) return s.slice(1, -1);
+    if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+    if (/^[a-zA-Z_]\w*$/.test(s) && s in memory) return memory[s];
+    if (/^[a-zA-Z_]\w*$/.test(s)) return 0;
+    return NaN;
+  }
+  function evalCmp(l, op, r, mem) {
+    const lv = resolveValue(l, mem), rv = resolveValue(r, mem);
+    switch (op) { case '>': return lv > rv; case '<': return lv < rv; case '>=': return lv >= rv; case '<=': return lv <= rv; case '==': return lv == rv; case '!=': return lv != rv; }
+    return false;
+  }
+  function evalArith(expr, mem) {
+    const parts = expr.trim().split('=');
+    let assignTo = null, rhs = expr.trim();
+    if (parts.length >= 2 && /^[a-zA-Z_]\w*$/.test(parts[0].trim())) {
+      assignTo = parts[0].trim(); rhs = parts.slice(1).join('=').trim();
+    }
+    const tokens = rhs.split(/\s+/);
+    let result;
+    if (tokens.length === 1) result = resolveValue(tokens[0], mem);
+    else if (tokens.length === 3) {
+      const l = resolveValue(tokens[0], mem), r = resolveValue(tokens[2], mem);
+      switch (tokens[1]) { case '+': result = l + r; break; case '-': result = l - r; break; case '*': result = l * r; break; case '/': result = r ? l / r : NaN; break; case '%': result = l % r; break; default: result = l; }
+    } else {
+      try { const vd = Object.entries(mem).map(([k, v]) => `let ${k}=${JSON.stringify(v)};`).join(''); result = Function(vd + 'return(' + rhs + ');')(); } catch (e) { result = NaN; }
+    }
+    return { assignTo, result };
+  }
+  return {
+    evaluate(expr, mem) {
+      const e = expr.trim();
+      const m = e.match(/^(.+?)\s*(>=|<=|==|!=|>|<)\s*(.+)$/);
+      if (m) return evalCmp(m[1].trim(), m[2], m[3].trim(), mem);
+      return evalArith(e, mem);
+    },
+    resolveOutput(val, mem) { return resolveValue(val, mem); }
+  };
+})();
+
+/* ================================================================
+   SIMULATE RENDERER (unchanged)
+================================================================ */
+const Renderer = (() => {
+  const canvas = document.getElementById('flowchart-canvas');
+  const ctx = canvas.getContext('2d');
+  let W = 0, H = 0;
+  let _nodeMap = {}, _nodes = [], _edges =[];
+
+  function setChart(chart) {
+    _nodes = chart.nodes; _edges = chart.edges;
+    _nodeMap = {}; _nodes.forEach(n => _nodeMap[n.id] = n);
+  }
+
+  function resize() {
+    const par = canvas.parentElement;
+    W = par.clientWidth; H = Math.max(440, W * 0.9);
+    canvas.width = W; canvas.height = H;
+    draw();
+  }
+
+  function isDark() { return !document.body.classList.contains('light-mode'); }
+  function tc() {
+    return isDark()
+      ? { edge: '#475569', eLbl: '#94a3b8', text: '#f8fafc', bg: '#181a20' }
+      : { edge: '#94a3b8', eLbl: '#64748b', text: '#0f172a', bg: '#ffffff' };
+  }
+
+  function getPos(n) { return { x: n.x * W, y: n.y * H }; }
+
+  function getEdgePts(fn, tn) {
+    const { x: fx, y: fy } = getPos(fn), { x: tx, y: ty } = getPos(tn);
+    const fhh = fn.type === 'decision' ? DIAMOND_H / 2 : NODE_H / 2;
+    const thh = tn.type === 'decision' ? DIAMOND_H / 2 : NODE_H / 2;
+    const fhw = fn.type === 'decision' ? DIAMOND_W / 2 : NODE_W / 2 + 14;
+    const thw = tn.type === 'decision' ? DIAMOND_W / 2 : NODE_W / 2 + 14;
+    let x1, y1, x2, y2;
+    if (Math.abs(tx - fx) < 24) { x1 = fx; y1 = fy + fhh; x2 = tx; y2 = ty - thh; }
+    else if (tx > fx) { x1 = fx + fhw; y1 = fy; x2 = tx - thw; y2 = ty; }
+    else { x1 = fx - fhw; y1 = fy; x2 = tx + thw; y2 = ty; }
+    return { x1, y1, x2, y2 };
+  }
+
+  function arrow(x1, y1, x2, y2, label, isTrue, isFalse) {
+    const c = tc();
+    ctx.save(); ctx.strokeStyle = c.edge; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    if (Math.abs(x2 - x1) > 30) { const mx = (x1 + x2) / 2; ctx.bezierCurveTo(mx, y1, mx, y2, x2, y2); }
+    else { ctx.lineTo(x2, y2); }
+    ctx.stroke();
+    
+    const ang = Math.atan2(y2 - y1, x2 - x1), al = 10, aa = 0.45;
+    ctx.beginPath(); ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - al * Math.cos(ang - aa), y2 - al * Math.sin(ang - aa));
+    ctx.lineTo(x2 - al * Math.cos(ang + aa), y2 - al * Math.sin(ang + aa));
+    ctx.closePath(); ctx.fillStyle = c.edge; ctx.fill();
+    
+    if (label) {
+      ctx.font = '600 11px JetBrains Mono, monospace';
+      ctx.fillStyle = isTrue ? '#10b981' : isFalse ? '#ef4444' : c.eLbl;
+      ctx.textAlign = 'center'; ctx.fillText(label, (x1 + x2) / 2, (y1 + y2) / 2 - 12);
+    }
+    ctx.restore();
+  }
+
+  function drawNode(n, hl) {
+    const c = tc();
+    const { x, y } = getPos(n);
+    const col = NODE_COLORS[n.type] || '#888';
+    const isHL = hl === n.id;
+    
+    ctx.save();
+    if (isHL) { ctx.shadowColor = col; ctx.shadowBlur = 18; }
+    
+    if (n.type === 'decision') {
+      const hw = DIAMOND_W / 2, hh = DIAMOND_H / 2;
+      ctx.beginPath(); ctx.moveTo(x, y - hh); ctx.lineTo(x + hw, y); ctx.lineTo(x, y + hh); ctx.lineTo(x - hw, y); ctx.closePath();
+      ctx.fillStyle = isHL ? col + '33' : col + '18'; ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = isHL ? 2.5 : 1.8; ctx.stroke();
+    } else if (n.type === 'start' || n.type === 'end') {
+      const hw = NODE_W / 2, hh = NODE_H / 2;
+      ctx.beginPath(); ctx.roundRect(x - hw, y - hh, NODE_W, NODE_H, hh);
+      if (isHL) { ctx.fillStyle = col; ctx.fill(); }
+      else { ctx.fillStyle = col + '15'; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke(); }
+    } else {
+      const hw = NODE_W / 2, hh = NODE_H / 2, sk = 12;
+      ctx.beginPath();
+      if (n.type === 'input' || n.type === 'output') { ctx.moveTo(x - hw + sk, y - hh); ctx.lineTo(x + hw + sk, y - hh); ctx.lineTo(x + hw - sk, y + hh); ctx.lineTo(x - hw - sk, y + hh); ctx.closePath(); }
+      else { ctx.roundRect(x - hw, y - hh, NODE_W, NODE_H, 6); }
+      ctx.fillStyle = isHL ? col + '30' : col + '15'; ctx.fill();
+      ctx.strokeStyle = col; ctx.lineWidth = isHL ? 2.5 : 1.8; ctx.stroke();
+    }
+    
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = isHL ? (n.type === 'start' || n.type === 'end' ? '#fff' : c.text) : c.text;
+    ctx.font = `${isHL ? '600' : '500'} 13px 'Inter', sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(n.label, x, y);
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    _edges.forEach(e => {
+      const fn = _nodeMap[e.from], tn = _nodeMap[e.to];
+      if (!fn || !tn) return;
+      const { x1, y1, x2, y2 } = getEdgePts(fn, tn);
+      arrow(x1, y1, x2, y2, e.label, e.label === 'true', e.label === 'false');
+    });
+    _nodes.forEach(n => drawNode(n, State.highlight));
+  }
+
+  return { draw, resize, setChart, get W() { return W; }, get H() { return H; } };
+})();
+
+/* ================================================================
+   ENGINE (updated for multi‑variable input)
+================================================================ */
+const Engine = (() => {
+  let _nodeMap = {};
+
+  function loadChart(chart) {
+    _nodeMap = {};
+    chart.nodes.forEach(n => _nodeMap[n.id] = n);
+  }
+
+  function start() {
+    const sn = Object.values(_nodeMap).find(n => n.type === 'start');
+    if (!sn) { UI.log('error', 'No Start node found!'); return; }
+    State.setCurrent(sn.id); State.setFinished(false);
+    UI.log('info', '— Simulation started —');
+    UI.setStatus('running', 'Running…');
+    highlight(sn.id);
+  }
+
+  function highlight(id) { State.setHighlight(id); Renderer.draw(); UI.updateMemory(); }
+
+  function step(onDone) {
+    if (State.finished) { onDone && onDone(); return; }
+    if (!State.current) { start(); onDone && onDone(); return; }
+    const node = _nodeMap[State.current];
+    if (!node) { UI.log('error', 'Node not found: ' + State.current); onDone && onDone(); return; }
+    
+    highlight(node.id);
+    switch (node.type) {
+      case 'start':
+        UI.log('info', '▷ Start executed'); advance(node.next, onDone); break;
+      case 'input':
+        UI.setStatus('waiting', `Waiting for input: ${node.variable}`);
+        UI.showInputModal(node.variable, vals => {
+          Object.entries(vals).forEach(([k, v]) => State.setMemory(k, v));
+          UI.log('input', `⌨ Input: ${JSON.stringify(vals)}`);
+          UI.updateMemory(); UI.setStatus('running', 'Running…');
+          advance(node.next, onDone);
+        }); break;
+      case 'process': {
+        const res = Evaluator.evaluate(node.value || '', State.memory);
+        if (res && res.assignTo) { State.setMemory(res.assignTo, res.result); UI.log('info', `⚙ Process: ${res.assignTo} = ${res.result}`); UI.updateMemory(res.assignTo); }
+        else UI.log('info', `⚙ Process: ${node.value}`);
+        advance(node.next, onDone); break;
+      }
+      case 'decision': {
+        const res = Evaluator.evaluate(node.condition, State.memory);
+        UI.log('check', `◈ Check: ${node.condition} → ${res ? 'TRUE' : 'FALSE'}`);
+        advance(res ? node.trueBranch : node.falseBranch, onDone); break;
+      }
+      case 'output': {
+        const out = Evaluator.resolveOutput(node.value, State.memory);
+        UI.log('output', `◉ Output: ${out}`); advance(node.next, onDone); break;
+      }
+      case 'end':
+        UI.log('success', '■ Simulation completed successfully');
+        State.setFinished(true); State.setRunning(false);
+        UI.setStatus('done', 'Complete'); UI.updateButtons();
+        onDone && onDone(); break;
+      default:
+        UI.log('error', `Unknown node type: ${node.type}`); onDone && onDone();
+    }
+  }
+
+  function advance(nextId, onDone) {
+    if (nextId) { State.setCurrent(nextId); onDone && onDone(); }
+    else { State.setFinished(true); State.setRunning(false); UI.setStatus('done', 'Complete'); UI.updateButtons(); }
+  }
+
+  function runAuto() {
+    if (State.finished || !State.running) return;
+    step(() => {
+      if (!State.finished && State.running) {
+        const delay = parseInt(document.getElementById('speed-select').value);
+        if (delay === 0) { if (!State.stepCb) runAuto(); }
+        else { const t = setTimeout(() => { if (!State.stepCb) runAuto(); }, delay); State.setAnimTimer(t); }
+      }
+    });
+  }
+
+  return { start, step, runAuto, loadChart };
+})();
+
+/* ================================================================
+   UI HANDLERS (updated for multi‑variable modal)
+================================================================ */
+const UI = (() => {
+  const consoleEl = document.getElementById('console-body');
+  const memGrid = document.getElementById('memory-grid');
+  const memLabel = document.getElementById('mem-label');
+  const statusDot = document.getElementById('status-dot');
+  const statusTxt = document.getElementById('status-text');
+  const inputOverlay = document.getElementById('modal-overlay');
+  const inputContainer = document.getElementById('modal-input-container');
+  const modalCancel = document.getElementById('modal-cancel');
+  const modalConfirm = document.getElementById('modal-confirm');
+  
+  let firstLog = true;
+  let inputCallback = null;
+  let inputVars = [];
+
+  function log(type, msg) {
+    if (firstLog) { consoleEl.innerHTML = ''; firstLog = false; }
+    const line = document.createElement('div');
+    line.className = 'log-line ' + type; line.textContent = msg;
+    consoleEl.appendChild(line); consoleEl.scrollTop = consoleEl.scrollHeight;
+  }
+
+  function clearConsole() { consoleEl.innerHTML = '<span class="console-empty">Console cleared.</span>'; firstLog = true; }
+
+  function updateMemory(updatedKey) {
+    const mem = State.memory, keys = Object.keys(mem);
+    memLabel.textContent = keys.length ? JSON.stringify(mem) : '{ }';
+    if (!keys.length) { memGrid.innerHTML = '<span class="console-empty">No variables initialized</span>'; return; }
+    memGrid.innerHTML = '';
+    keys.forEach(k => {
+      const cell = document.createElement('div');
+      cell.className = 'mem-cell' + (k === updatedKey ? ' updated' : '');
+      cell.innerHTML = `<div class="mem-key">${k}</div><div class="mem-val">${mem[k]}</div>`;
+      memGrid.appendChild(cell);
+    });
+  }
+
+  function setStatus(type, msg) { statusDot.className = 'status-dot ' + type; statusTxt.textContent = msg; }
+
+  function updateButtons() {
+    const fin = State.finished, run = State.running;
+    document.getElementById('btn-run').disabled = run || fin;
+    document.getElementById('btn-step').disabled = run || fin;
+  }
+
+  function showInputModal(varList, callback) {
+    const vars = varList.split(',').map(v => v.trim()).filter(Boolean);
+    if (vars.length === 0) { callback({}); return; }
+    inputVars = vars;
+    inputCallback = callback;
+    document.getElementById('modal-title').textContent = 'Enter Values';
+    document.getElementById('modal-desc').textContent = 'Provide values for the following variables.';
+    inputContainer.innerHTML = '';
+    vars.forEach(v => {
+      const div = document.createElement('div');
+      div.className = 'modal-input-group';
+      div.innerHTML = `<label>${v}</label><input type="text" class="modal-var-input" data-var="${v}" placeholder="value for ${v}">`;
+      inputContainer.appendChild(div);
+    });
+    inputOverlay.classList.add('active');
+    inputContainer.querySelector('input').focus();
+    State.setStepCb(callback);
+  }
+
+  function hideInputModal() { inputOverlay.classList.remove('active'); }
+
+  function confirmInput() {
+    const inputs = document.querySelectorAll('.modal-var-input');
+    const values = {};
+    inputs.forEach(inp => {
+      const varName = inp.dataset.var;
+      const raw = inp.value.trim();
+      if (raw === '') return; // skip empty
+      values[varName] = isNaN(parseFloat(raw)) ? raw : parseFloat(raw);
+    });
+    hideInputModal();
+    const cb = inputCallback; inputCallback = null;
+    if (cb) {
+      cb(values);
+      if (State.running && !State.finished) {
+        const delay = parseInt(document.getElementById('speed-select').value);
+        const t = setTimeout(() => Engine.runAuto(), Math.max(delay, 200));
+        State.setAnimTimer(t);
+      }
+    }
+  }
+
+  modalConfirm.addEventListener('click', confirmInput);
+  modalCancel.addEventListener('click', () => { hideInputModal(); inputCallback = null; });
+  inputOverlay.addEventListener('keydown', e => { if (e.key === 'Enter') confirmInput(); });
+
+  document.getElementById('btn-run').addEventListener('click', () => {
+    if (!State.current && !State.finished) Engine.start();
+    State.setRunning(true); updateButtons(); Engine.runAuto();
+  });
+  document.getElementById('btn-step').addEventListener('click', () => {
+    if (State.running) return;
+    if (!State.current && !State.finished) Engine.start();
+    Engine.step(() => {});
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    State.reset(); State.setHighlight(null); Renderer.draw();
+    updateMemory(); setStatus('', 'Ready — press Run or Step');
+    clearConsole(); updateButtons();
+  });
+
+  function activateChart(type) {
+    State.setActiveChart(type);
+    let chart;
+    if (type === 'sample') {
+      chart = SAMPLE_FLOWCHART;
+      document.getElementById('canvas-label').textContent = 'Sample Flowchart';
+    } else {
+      const errors = Builder.isValid();
+      if (errors.length) {
+        alert('Chart has the following issues:\n• ' + errors.join('\n• ') + '\n\nPlease resolve them in the Build tab.');
+        return;
+      }
+      chart = Builder.getChart();
+      document.getElementById('canvas-label').textContent = 'My Custom Chart';
+    }
+    State.reset(); State.setHighlight(null);
+    Engine.loadChart(chart); Renderer.setChart(chart); Renderer.draw();
+    updateMemory(); setStatus('', 'Ready — press Run or Step');
+    clearConsole(); updateButtons();
+    
+    document.getElementById('btn-use-sample').style.borderColor = type === 'sample' ? 'var(--accent)' : '';
+    document.getElementById('btn-use-sample').style.color = type === 'sample' ? 'var(--accent)' : '';
+    document.getElementById('btn-use-custom').style.borderColor = type === 'custom' ? 'var(--accent)' : '';
+    document.getElementById('btn-use-custom').style.color = type === 'custom' ? 'var(--accent)' : '';
+  }
+
+  document.getElementById('btn-use-sample').addEventListener('click', () => activateChart('sample'));
+  document.getElementById('btn-use-custom').addEventListener('click', () => activateChart('custom'));
+
+  document.getElementById('theme-btn').addEventListener('click', () => {
+    const isLight = document.body.classList.toggle('light-mode');
+    document.getElementById('theme-btn').textContent = isLight ? '🌙 Dark' : '☀ Light';
+    Renderer.draw(); Builder.draw();
+  });
+
+  document.getElementById('speed-select').addEventListener('change', e => State.setSpeed(parseInt(e.target.value)));
+
+  return { log, clearConsole, updateMemory, setStatus, updateButtons, showInputModal, hideInputModal, activateChart };
+})();
+
+/* ================================================================
+   BUILDER UI WIRING (enhanced with drag‑and‑drop)
+================================================================ */
+document.querySelectorAll('.palette-node').forEach(el => {
+  el.addEventListener('click', () => {
+    Builder.setSelectedType(el.dataset.type);
+    Builder.setMode('place');
+    document.querySelectorAll('.palette-node').forEach(p => p.classList.remove('selected-tool'));
+    el.classList.add('selected-tool');
+  });
+  
+  // Drag and drop
+  el.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', el.dataset.type);
+    e.dataTransfer.effectAllowed = 'copy';
+  });
+});
+
+const builderCanvas = document.getElementById('builder-canvas');
+builderCanvas.addEventListener('dragover', e => e.preventDefault());
+builderCanvas.addEventListener('drop', e => {
+  e.preventDefault();
+  const type = e.dataTransfer.getData('text/plain');
+  if (!type) return;
+  const rect = builderCanvas.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const n = Builder.addNode(type, px, py);
+  Builder.openEditModal(n.id);
+});
+
+document.getElementById('build-mode-place').addEventListener('click', () => Builder.setMode('place'));
+document.getElementById('build-mode-connect').addEventListener('click', () => Builder.setMode('connect'));
+document.getElementById('build-mode-drag').addEventListener('click', () => Builder.setMode('drag'));
+
+document.getElementById('build-clear').addEventListener('click', () => {
+  if (confirm('Are you sure you want to clear all nodes and connections?')) Builder.clearAll();
+});
+
+document.getElementById('build-load-sample').addEventListener('click', () => {
+  if (confirm('Load the sample chart? This will overwrite your current layout.')) Builder.loadSample();
+});
+
+document.getElementById('build-use').addEventListener('click', () => {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-tab="simulate"]').classList.add('active');
+  document.getElementById('tab-simulate').classList.add('active');
+  UI.activateChart('custom');
+});
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+    if (tab === 'build') Builder.resize(); else Renderer.resize();
+  });
+});
+
+function buildLegend() {
+  const types =[
+    { color: 'var(--node-start)', label: 'Start/End' },
+    { color: 'var(--node-process)', label: 'Process' },
+    { color: 'var(--node-decision)', label: 'Decision' },
+    { color: 'var(--node-input)', label: 'Input' },
+    { color: 'var(--node-output)', label: 'Output' }
+  ];
+  document.getElementById('legend').innerHTML = types.map(t =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${t.color}"></div><span>${t.label}</span></div>`
+  ).join('');
+}
+
+/* ================================================================
+   INIT
+================================================================ */
+window.addEventListener('DOMContentLoaded', () => {
+  buildLegend();
+  Engine.loadChart(SAMPLE_FLOWCHART);
+  Renderer.setChart(SAMPLE_FLOWCHART);
+  Renderer.resize();
+  window.addEventListener('resize', () => {
+    Renderer.resize();
+    if (document.getElementById('tab-build').classList.contains('active')) Builder.resize();
+  });
+
+  Builder.resize();
+  Builder.setMode('place');
+  document.querySelector('.palette-node[data-type=start]').classList.add('selected-tool');
+});
+</script>
+</body>
+</html>
